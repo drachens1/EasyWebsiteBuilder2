@@ -1,0 +1,17 @@
+use flate2::write::GzEncoder;
+use flate2::Compression;
+use std::io::Write;
+use std::sync::Arc;
+
+#[inline]
+pub fn gzip_html(content: &str) -> Arc<Vec<u8>> {
+	gzip_html_bytes(content.as_bytes())
+}
+
+#[inline]
+pub fn gzip_html_bytes(content: &[u8]) -> Arc<Vec<u8>> {
+	let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
+	encoder.write_all(content).unwrap();
+	Arc::new(encoder.finish().unwrap())
+}
+
