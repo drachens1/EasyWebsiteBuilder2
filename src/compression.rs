@@ -1,7 +1,6 @@
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use std::io::Write;
-use std::sync::Arc;
 
 #[inline]
 pub fn gzip_html(content: &str) -> Vec<u8> {

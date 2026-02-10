@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use warp::Filter;
 use warp::http::Response;
-use crate::page::Page;
+use crate::page::{Page, PageType};
 
 pub struct Website {
 	landing: Page,
@@ -52,12 +52,18 @@ impl Website {
 					&not_found
 				}
 			};
-			let resp = Response::builder()
-				.status(status)
-				.header("Content-Encoding", "gzip")
-				.header("Content-Type", page.content_type())
-				.body(page.html().clone())
-				.unwrap();
+				let mut builder = Response::builder()
+					.status(status)
+					.header("Content-Type", page.content_type());
+
+				if !matches!(page.page_type(), PageType::Image) {
+					builder = builder.header("Content-Encoding", "gzip");
+				}
+
+				let resp = builder
+					.body(page.html().clone())
+					.unwrap();
+
 
 			println!("{} -> {:?} in {:?}", raw, status, timer.elapsed());
 			resp
