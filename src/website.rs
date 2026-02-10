@@ -7,11 +7,10 @@ use crate::page::Page;
 //Page 0 is landing, Page 1 is 404, Page 2 + dynamic
 pub struct Website {
 	pages: Arc<Vec<Page>>,
-	static_directories: Vec<String>,
 }
 impl Website {
 	pub fn new() -> Self {
-		Self { pages: Arc::new(Vec::new()), static_directories: Vec::new() }
+		Self { pages: Arc::new(Vec::new()) }
 	}
 
 	#[inline]
@@ -38,11 +37,6 @@ impl Website {
 		}else {
 			pages.push(page);
 		}
-	}
-
-	#[inline]
-	pub fn add_static_directory(&mut self, path: impl Into<String>) {
-		self.static_directories.push(path.into());
 	}
 
 	pub async fn start(&self, ip: [u8; 4], port: u16) {
@@ -73,7 +67,7 @@ impl Website {
 					if path_str == format!("/{}", page_path) || path_str == page_path {
 						return Response::builder()
 							.header("Content-Encoding", "gzip")
-							.header("Content-Type", "text/html; charset=utf-8")
+							.header("Content-Type", page.content_type())
 							.body(page.html().as_ref().clone())
 							.unwrap();
 					}
@@ -93,11 +87,7 @@ impl Website {
 					.unwrap()
 			});
 
-		let mut routes = dynamic_route.map(|resp| Box::new(resp) as Box<dyn warp::Reply>).boxed();
-
-		for dir in &self.static_directories {
-			routes = warp::fs::dir(dir.clone()).map(|file| Box::new(file) as Box<dyn warp::Reply>).or(routes).unify().boxed();
-		}
+		let routes = dynamic_route.map(|resp| Box::new(resp) as Box<dyn warp::Reply>).boxed();
 
 		warp::serve(routes).run((ip, port)).await;
 	}

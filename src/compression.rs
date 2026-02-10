@@ -10,7 +10,7 @@ pub fn gzip_html(content: &str) -> Arc<Vec<u8>> {
 
 #[inline]
 pub fn gzip_html_bytes(content: &[u8]) -> Arc<Vec<u8>> {
-	let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
+	let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
 	encoder.write_all(content).unwrap();
 	Arc::new(encoder.finish().unwrap())
 }
