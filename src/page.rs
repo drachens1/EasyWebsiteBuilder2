@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use crate::compression::gzip_html;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Page {
 	path: String,
-	html: Arc<Vec<u8>>,
+	html: Vec<u8>,
 	total_views: u64,
 	current_viewers: u32,
 	page_type: PageType,
@@ -49,10 +49,11 @@ impl Page {
 		}
 	}
 	#[inline] pub fn path(&self) -> &str { &self.path }
-	#[inline] pub fn html(&self) -> &Arc<Vec<u8>> { &self.html }
+	#[inline] pub fn path_string(&self) -> String { self.path.clone() }
+	#[inline] pub fn html(&self) -> &Vec<u8> { &self.html }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PageType {
 	Css,
 	Javascript,
