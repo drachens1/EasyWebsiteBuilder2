@@ -50,8 +50,8 @@ impl Page {
 		}
 	}
 
-	pub fn new_png_from_file(path: impl Into<String>, file_path: &str) -> Page {
-		let bytes = fs::read(file_path)
+	pub fn new_png_from_file(path: impl Into<String>, file_path: impl Into<String>) -> Page {
+		let bytes = fs::read(file_path.into())
 			.expect("Failed to read PNG file");
 		Self::new_png(path, bytes)
 	}
