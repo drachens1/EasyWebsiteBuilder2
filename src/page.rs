@@ -1,4 +1,3 @@
-use std::fs;
 use crate::compression::{generate_etag, gzip_html};
 
 #[derive(Debug, Clone)]

@@ -1,14 +1,16 @@
+use crate::page::{Page, PageType};
+use crate::rest::{ApiEndpoint, Method};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use warp::Filter;
 use warp::http::Response;
-use crate::page::{Page, PageType};
+use warp::Filter;
 
 pub struct Website {
 	landing: Page,
 	not_found: Page,
 	pages: Arc<HashMap<String, Page>>,
+	endpoints: Arc<HashMap<String, ApiEndpoint>>,
 }
 impl Website {
 	pub fn new(landing: Page, not_found: Page) -> Self {
@@ -16,6 +18,7 @@ impl Website {
 			landing,
 			not_found,
 			pages: Arc::new(HashMap::new()),
+			endpoints: Arc::new(HashMap::new()),
 		}
 	}
 
@@ -27,25 +30,46 @@ impl Website {
 		self
 	}
 
+	#[inline]
+	pub fn add_rest_endpoint(&mut self, endpoint: ApiEndpoint) -> &mut Self {
+		Arc::get_mut(&mut self.endpoints)
+			.expect("Cannot mutate endpoints after server start")
+			.insert(endpoint.path.clone(), endpoint);
+		self
+	}
+
 	pub async fn start(&self, ip: [u8; 4], port: u16) {
-		println!(
-			"Server running on http://{}.{}.{}.{}:{}",
-			ip[0], ip[1], ip[2], ip[3], port
-		);
+		println!("Server running on http://{}.{}.{}.{}:{}", ip[0], ip[1], ip[2], ip[3], port);
 
 		let pages = self.pages.clone();
+		let endpoints = self.endpoints.clone();
 		let landing = self.landing.clone();
 		let not_found = self.not_found.clone();
 
 		let routes = warp::path::full()
+			.and(warp::method())
 			.and(warp::header::headers_cloned())
-			.map(move |path: warp::path::FullPath, headers: warp::http::HeaderMap| {
+			.map(move |full_path: warp::path::FullPath, method: warp::http::Method, headers: warp::http::HeaderMap| {
 				let timer = Instant::now();
-				let raw = path.as_str();
+				let raw_path = full_path.as_str();
 
-				let (page, status) = if raw == "/" {
+				if let Some(endpoint) = endpoints.get(raw_path) {
+					let method_matches = match endpoint.method {
+						Method::GET => method == warp::http::Method::GET,
+						Method::POST => method == warp::http::Method::POST,
+						Method::DELETE => method == warp::http::Method::DELETE,
+					};
+
+					if method_matches {
+						let resp = (endpoint.handler)().into_response();
+						println!("API: {} -> {} in {:?}", raw_path, resp.status(), timer.elapsed());
+						return resp;
+					}
+				}
+
+				let (page, status) = if raw_path == "/" {
 					(&landing, 200)
-				} else if let Some(p) = pages.get(raw) {
+				} else if let Some(p) = pages.get(raw_path) {
 					(p, 200)
 				} else {
 					(&not_found, 404)
@@ -73,10 +97,8 @@ impl Website {
 					builder = builder.header("Content-Encoding", "gzip");
 				}
 
-				let resp = builder.body(page.html().clone()).unwrap();
-
-				println!("{} -> {} in {:?}", raw, status, timer.elapsed());
-				return resp;
+				println!("STATIC: {} -> {} in {:?}", raw_path, status, timer.elapsed());
+				builder.body(page.html().clone()).unwrap()
 			});
 
 		warp::serve(routes).run((ip, port)).await;

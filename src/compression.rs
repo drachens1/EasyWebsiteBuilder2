@@ -1,7 +1,7 @@
 use flate2::write::GzEncoder;
 use flate2::Compression;
+use sha2::{Digest, Sha256};
 use std::io::Write;
-use sha2::{Sha256, Digest};
 
 #[inline]
 pub fn gzip_html(content: &str) -> Vec<u8> {
