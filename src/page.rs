@@ -6,6 +6,7 @@ pub struct Page {
 	html: Vec<u8>,
 	page_type: PageType,
 	etag: String,
+	requires_auth: bool,
 }
 impl Page {
 	pub fn new_from_html_str(path: impl Into<String>, html: &str) -> Page {
@@ -15,6 +16,7 @@ impl Page {
 			etag: generate_etag(&html),
 			html,
 			page_type: PageType::Html,
+			requires_auth: false,
 		}
 	}
 
@@ -25,6 +27,7 @@ impl Page {
 			etag: generate_etag(&css),
 			html: css,
 			page_type: PageType::Css,
+			requires_auth: false,
 		}
 	}
 
@@ -35,6 +38,7 @@ impl Page {
 			etag: generate_etag(&js),
 			html: js,
 			page_type: PageType::Javascript,
+			requires_auth: false,
 		}
 	}
 
@@ -45,6 +49,7 @@ impl Page {
 			html: webp_bytes,
 			etag,
 			page_type: PageType::Image,
+			requires_auth: false,
 		}
 	}
 
@@ -57,6 +62,13 @@ impl Page {
 			PageType::Image => "image/webp",
 		}
 	}
+
+	pub fn private(mut self) -> Self {
+		self.requires_auth = true;
+		self
+	}
+
+	#[inline] pub fn requires_auth(&self) -> bool { self.requires_auth }
 	#[inline] pub fn cache_control(&self) -> &'static str { &"public, max-age=31536000, immutable" }
 	#[inline] pub fn etag(&self) -> &str { &self.etag }
 	#[inline] pub fn page_type(&self) -> &PageType { &self.page_type }

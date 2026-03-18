@@ -1,7 +1,7 @@
 use crate::page::{Page, PageType};
-use crate::rest::{ApiEndpoint, Method};
+use crate::rest::{ApiEndpoint, ApiRequest, Method};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use warp::http::Response;
 use warp::Filter;
@@ -9,33 +9,37 @@ use warp::Filter;
 pub struct Website {
 	landing: Page,
 	not_found: Page,
-	pages: Arc<HashMap<String, Page>>,
-	endpoints: Arc<HashMap<String, ApiEndpoint>>,
+	pages: Arc<RwLock<HashMap<String, Page>>>,
+	endpoints: Arc<RwLock<HashMap<String, ApiEndpoint>>>,
+	secret: String,
 }
 impl Website {
-	pub fn new(landing: Page, not_found: Page) -> Self {
+	pub fn new(secret: String, landing: Page, not_found: Page) -> Self {
 		Self {
 			landing,
 			not_found,
-			pages: Arc::new(HashMap::new()),
-			endpoints: Arc::new(HashMap::new()),
+			pages: Arc::new(RwLock::new(HashMap::new())),
+			endpoints: Arc::new(RwLock::new(HashMap::new())),
+			secret,
 		}
 	}
 
 	#[inline]
-	pub fn add_page(&mut self, page: Page) -> &mut Self {
-		Arc::get_mut(&mut self.pages)
-			.expect("Cannot mutate pages after server start")
-			.insert(page.path_string(), page);
-		self
+	pub async fn add_page(&self, page: Page) {
+		let mut lock = self.pages.write().unwrap();
+		lock.insert(page.path_string(), page);
 	}
 
 	#[inline]
-	pub fn add_rest_endpoint(&mut self, endpoint: ApiEndpoint) -> &mut Self {
-		Arc::get_mut(&mut self.endpoints)
-			.expect("Cannot mutate endpoints after server start")
-			.insert(endpoint.path.clone(), endpoint);
-		self
+	pub async fn remove_page(&self, path_string: &str) -> Option<Page> {
+		let mut lock = self.pages.write().unwrap();
+		lock.remove(path_string)
+	}
+
+	#[inline]
+	pub async fn add_rest_endpoint(&self, endpoint: ApiEndpoint) {
+		let mut lock = self.endpoints.write().unwrap();
+		lock.insert(endpoint.path.clone(), endpoint);
 	}
 
 	pub async fn start(&self, ip: [u8; 4], port: u16) {
@@ -46,14 +50,24 @@ impl Website {
 		let landing = self.landing.clone();
 		let not_found = self.not_found.clone();
 
+		let auth_token = format!("auth_token={}", self.secret);
+
 		let routes = warp::path::full()
 			.and(warp::method())
 			.and(warp::header::headers_cloned())
-			.map(move |full_path: warp::path::FullPath, method: warp::http::Method, headers: warp::http::HeaderMap| {
+			.and(warp::body::bytes())
+			.map(move |full_path: warp::path::FullPath, method: warp::http::Method, headers: warp::http::HeaderMap, body: warp::hyper::body::Bytes| {
 				let timer = Instant::now();
 				let raw_path = full_path.as_str();
 
-				if let Some(endpoint) = endpoints.get(raw_path) {
+				let is_authenticated = headers.get("cookie")
+					.and_then(|c| c.to_str().ok())
+					.map(|c| c.contains(&auth_token))
+					.unwrap_or(false);
+
+				let endpoints_lock = endpoints.read().unwrap();
+
+				if let Some(endpoint) = endpoints_lock.get(raw_path) {
 					let method_matches = match endpoint.method {
 						Method::GET => method == warp::http::Method::GET,
 						Method::POST => method == warp::http::Method::POST,
@@ -61,15 +75,30 @@ impl Website {
 					};
 
 					if method_matches {
-						let resp = (endpoint.handler)().into_response();
+						let req = ApiRequest {
+							body: body.to_vec(),
+							method: method.clone(),
+						};
+
+						let resp = (endpoint.handler)(req).into_response();
 						println!("API: {} -> {} in {:?}", raw_path, resp.status(), timer.elapsed());
 						return resp;
 					}
 				}
+				drop(endpoints_lock);
 
+				let pages_lock = pages.read().unwrap();
 				let (page, status) = if raw_path == "/" {
 					(&landing, 200)
-				} else if let Some(p) = pages.get(raw_path) {
+				} else if let Some(p) = pages_lock.get(raw_path) {
+					if p.requires_auth() && !is_authenticated {
+						println!("AUTH: Access Denied for {} -> Redirecting to /", raw_path);
+						return Response::builder()
+							.status(303)
+							.header("Location", "/")
+							.body(Vec::new())
+							.unwrap();
+					}
 					(p, 200)
 				} else {
 					(&not_found, 404)
