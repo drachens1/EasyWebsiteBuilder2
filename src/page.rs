@@ -4,20 +4,16 @@ use crate::compression::{generate_etag, gzip_html};
 pub struct Page {
 	path: String,
 	html: Vec<u8>,
-	total_views: u64,
-	current_viewers: u32,
 	page_type: PageType,
 	etag: String,
 }
 impl Page {
-	pub fn new_from_html_str(path: impl Into<String>, html: &str, total_views: u64) -> Page {
+	pub fn new_from_html_str(path: impl Into<String>, html: &str) -> Page {
 		let html = gzip_html(html);
 		Self {
 			path: path.into(),
 			etag: generate_etag(&html),
 			html,
-			total_views,
-			current_viewers: 0,
 			page_type: PageType::Html,
 		}
 	}
@@ -28,8 +24,6 @@ impl Page {
 			path: path.into(),
 			etag: generate_etag(&css),
 			html: css,
-			total_views: 0,
-			current_viewers: 0,
 			page_type: PageType::Css,
 		}
 	}
@@ -40,8 +34,6 @@ impl Page {
 			path: path.into(),
 			etag: generate_etag(&js),
 			html: js,
-			total_views: 0,
-			current_viewers: 0,
 			page_type: PageType::Javascript,
 		}
 	}
@@ -52,8 +44,6 @@ impl Page {
 			path: path.into(),
 			html: webp_bytes,
 			etag,
-			total_views: 0,
-			current_viewers: 0,
 			page_type: PageType::Image,
 		}
 	}
