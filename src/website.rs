@@ -1,6 +1,8 @@
 use crate::page::{Page, PageType};
 use crate::rest::{ApiEndpoint, ApiRequest, Method};
 use std::collections::HashMap;
+use std::convert::Infallible;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use warp::http::Response;
@@ -14,13 +16,13 @@ pub struct Website {
 	secret: String,
 }
 impl Website {
-	pub fn new(secret: String, landing: Page, not_found: Page) -> Self {
+	pub fn new(secret: impl Into<String>, landing: Page, not_found: Page) -> Self {
 		Self {
 			landing,
 			not_found,
 			pages: Arc::new(RwLock::new(HashMap::new())),
 			endpoints: Arc::new(RwLock::new(HashMap::new())),
-			secret,
+			secret: secret.into(),
 		}
 	}
 
@@ -56,7 +58,8 @@ impl Website {
 			.and(warp::method())
 			.and(warp::header::headers_cloned())
 			.and(warp::body::bytes())
-			.map(move |full_path: warp::path::FullPath, method: warp::http::Method, headers: warp::http::HeaderMap, body: warp::hyper::body::Bytes| {
+			.and(remote_addr())
+			.map(move |full_path: warp::path::FullPath, method: warp::http::Method, headers: warp::http::HeaderMap, body: warp::hyper::body::Bytes, addr: Option<SocketAddr>| {
 				let timer = Instant::now();
 				let raw_path = full_path.as_str();
 
@@ -70,7 +73,12 @@ impl Website {
 					};
 
 					if method_matches {
+						let client_ip = addr
+							.map(|s| s.ip())
+							.unwrap_or_else(|| IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)));
+
 						let req = ApiRequest {
+							ip: client_ip,
 							body: body.to_vec(),
 							method: method.clone(),
 						};
@@ -132,4 +140,21 @@ impl Website {
 
 		warp::serve(routes).run((ip, port)).await;
 	}
+}
+
+pub fn remote_addr() -> impl Filter<Extract = (Option<SocketAddr>,), Error = Infallible> + Copy {
+	warp::header::optional::<String>("x-forwarded-for")
+		.and(warp::filters::ext::optional::<SocketAddr>())
+		.map(|forwarded: Option<String>, remote: Option<SocketAddr>| {
+			if let Some(ip) = forwarded
+				.and_then(|s| s.split(',').next()?.trim().parse::<IpAddr>().ok())
+			{
+				return Some(SocketAddr::new(ip, 0));
+			}
+			remote
+		})
+		.recover(|_| async {
+			Ok::<Option<SocketAddr>, Infallible>(None)
+		})
+		.unify()
 }

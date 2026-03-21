@@ -1,3 +1,4 @@
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use warp::http::Response;
 
@@ -50,8 +51,14 @@ impl ApiResponse {
 }
 
 pub struct ApiRequest {
+	pub ip: IpAddr,
 	pub body: Vec<u8>,
 	pub method: warp::http::Method,
+}
+impl ApiRequest {
+	pub fn ip_string(&self) -> String {
+		format!("{}", self.ip)
+	}
 }
 
 pub struct ApiEndpoint {
