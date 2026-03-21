@@ -7,6 +7,7 @@ pub struct Page {
 	page_type: PageType,
 	etag: String,
 	requires_auth: bool,
+	dynamic: bool,
 }
 impl Page {
 	pub fn new_from_html_str(path: impl Into<String>, html: &str) -> Page {
@@ -17,6 +18,7 @@ impl Page {
 			html,
 			page_type: PageType::Html,
 			requires_auth: false,
+			dynamic: false,
 		}
 	}
 
@@ -28,6 +30,7 @@ impl Page {
 			html: css,
 			page_type: PageType::Css,
 			requires_auth: false,
+			dynamic: false,
 		}
 	}
 
@@ -39,6 +42,7 @@ impl Page {
 			html: js,
 			page_type: PageType::Javascript,
 			requires_auth: false,
+			dynamic: false,
 		}
 	}
 
@@ -50,6 +54,7 @@ impl Page {
 			etag,
 			page_type: PageType::Image,
 			requires_auth: false,
+			dynamic: false,
 		}
 	}
 
@@ -68,8 +73,13 @@ impl Page {
 		self
 	}
 
+	pub fn dynamic(mut self) -> Self {
+		self.dynamic = true;
+		self
+	}
+
 	#[inline] pub fn requires_auth(&self) -> bool { self.requires_auth }
-	#[inline] pub fn cache_control(&self) -> &'static str { &"public, max-age=31536000, immutable" }
+	#[inline] pub fn cache_control(&self) -> &'static str { if self.dynamic { "public, max-age=31536000, mutable" } else { "public, max-age=31536000, immutable" } }
 	#[inline] pub fn etag(&self) -> &str { &self.etag }
 	#[inline] pub fn page_type(&self) -> &PageType { &self.page_type }
 	#[inline] pub fn path(&self) -> &str { &self.path }

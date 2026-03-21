@@ -60,11 +60,6 @@ impl Website {
 				let timer = Instant::now();
 				let raw_path = full_path.as_str();
 
-				let is_authenticated = headers.get("cookie")
-					.and_then(|c| c.to_str().ok())
-					.map(|c| c.contains(&auth_token))
-					.unwrap_or(false);
-
 				let endpoints_lock = endpoints.read().unwrap();
 
 				if let Some(endpoint) = endpoints_lock.get(raw_path) {
@@ -91,6 +86,11 @@ impl Website {
 				let (page, status) = if raw_path == "/" {
 					(&landing, 200)
 				} else if let Some(p) = pages_lock.get(raw_path) {
+					let is_authenticated = headers.get("cookie")
+						.and_then(|c| c.to_str().ok())
+						.map(|c| c.contains(&auth_token))
+						.unwrap_or(false);
+
 					if p.requires_auth() && !is_authenticated {
 						println!("AUTH: Access Denied for {} -> Redirecting to /", raw_path);
 						return Response::builder()
