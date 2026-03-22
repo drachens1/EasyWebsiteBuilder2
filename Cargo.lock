@@ -3,9 +3,17 @@
 version = 4
 
 [[package]]
+name = "DrachLogger"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
 name = "EasyWebsiteBuilder2"
 version = "0.1.0"
 dependencies = [
+ "DrachLogger",
  "flate2",
  "hex",
  "sha2",
