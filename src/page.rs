@@ -79,7 +79,7 @@ impl Page {
 	}
 
 	#[inline] pub fn requires_auth(&self) -> bool { self.requires_auth }
-	#[inline] pub fn cache_control(&self) -> &'static str { if self.dynamic { "no-cache" } else { "public, max-age=31536000, immutable" } }
+	#[inline] pub fn cache_control(&self) -> &'static str { if self.dynamic { "no-store, must-revalidate" } else { "public, max-age=31536000, immutable" } }
 	#[inline] pub fn etag(&self) -> &str { &self.etag }
 	#[inline] pub fn page_type(&self) -> &PageType { &self.page_type }
 	#[inline] pub fn path(&self) -> &str { &self.path }
