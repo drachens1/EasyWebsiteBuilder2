@@ -7,10 +7,10 @@ pub struct Page {
 	page_type: PageType,
 	etag: String,
 	requires_auth: bool,
-	dynamic: bool,
+	serve_type: ServeType,
 }
 impl Page {
-	pub fn new_from_html_str(path: impl Into<String>, html: &str) -> Page {
+	pub fn new_html(path: impl Into<String>, html: &str) -> Page {
 		let html = gzip_html(html);
 		Self {
 			path: path.into(),
@@ -18,7 +18,7 @@ impl Page {
 			html,
 			page_type: PageType::Html,
 			requires_auth: false,
-			dynamic: false,
+			serve_type: ServeType::Static,
 		}
 	}
 
@@ -30,7 +30,7 @@ impl Page {
 			html: css,
 			page_type: PageType::Css,
 			requires_auth: false,
-			dynamic: false,
+			serve_type: ServeType::Static,
 		}
 	}
 
@@ -42,7 +42,7 @@ impl Page {
 			html: js,
 			page_type: PageType::Javascript,
 			requires_auth: false,
-			dynamic: false,
+			serve_type: ServeType::Static,
 		}
 	}
 
@@ -54,8 +54,33 @@ impl Page {
 			etag,
 			page_type: PageType::Image,
 			requires_auth: false,
-			dynamic: false,
+			serve_type: ServeType::Static,
 		}
+	}
+
+	pub fn check(mut self) -> Self {
+		self.serve_type = ServeType::Check;
+		self
+	}
+
+	pub fn dynamic(mut self) -> Self {
+		self.serve_type = ServeType::Dynamic;
+		self
+	}
+
+	pub fn cache_for(mut self, i: u32) -> Self {
+		self.serve_type = ServeType::Timed(i);
+		self
+	}
+
+	pub fn immutable(mut self, i: u32) -> Self {
+		self.serve_type = ServeType::Immutable(i);
+		self
+	}
+
+	pub fn serve_type(mut self, serve_type: ServeType) -> Self {
+		self.serve_type = serve_type;
+		self
 	}
 
 	#[inline]
@@ -73,18 +98,30 @@ impl Page {
 		self
 	}
 
-	pub fn dynamic(mut self) -> Self {
-		self.dynamic = true;
-		self
-	}
-
 	#[inline] pub fn requires_auth(&self) -> bool { self.requires_auth }
-	#[inline] pub fn cache_control(&self) -> &'static str { if self.dynamic { "no-store, must-revalidate" } else { "public, max-age=31536000, immutable" } }
+	#[inline] pub fn cache_control(&self) -> String {
+		match self.serve_type {
+			ServeType::Dynamic => "no-store, must-revalidate".to_string(),
+			ServeType::Check => "no-cache".to_string(),
+			ServeType::Immutable(seconds) => format!("public, max-age={}, immutable", seconds),
+			ServeType::Timed(seconds) => format!("public, max-age={}", seconds),
+			ServeType::Static => "public, max-age=31536000, immutable".to_string(),
+		}
+	}
 	#[inline] pub fn etag(&self) -> &str { &self.etag }
 	#[inline] pub fn page_type(&self) -> &PageType { &self.page_type }
 	#[inline] pub fn path(&self) -> &str { &self.path }
 	#[inline] pub fn path_string(&self) -> String { self.path.clone() }
 	#[inline] pub fn html(&self) -> &Vec<u8> { &self.html }
+}
+
+#[derive(Debug, Clone)]
+pub enum ServeType {
+	Dynamic,
+	Check,
+	Immutable(u32),
+	Timed(u32),
+	Static,
 }
 
 #[derive(Debug, Clone)]
