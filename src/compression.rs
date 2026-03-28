@@ -5,7 +5,7 @@ use std::io::Write;
 
 #[inline]
 pub fn gzip_html(content: &str) -> Vec<u8> {
-	gzip_html_bytes(minify_html(content).as_bytes())
+	gzip_bytes(minify_html(content).as_bytes())
 }
 
 #[inline]
@@ -14,7 +14,7 @@ pub fn minify_html(html: &str) -> String {
 }
 
 #[inline]
-pub fn gzip_html_bytes(content: &[u8]) -> Vec<u8> {
+pub fn gzip_bytes(content: &[u8]) -> Vec<u8> {
 	let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
 	encoder.write_all(content).unwrap();
 	encoder.finish().unwrap()
