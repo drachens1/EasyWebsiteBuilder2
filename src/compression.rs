@@ -2,10 +2,11 @@ use flate2::write::GzEncoder;
 use flate2::Compression;
 use sha2::{Digest, Sha256};
 use std::io::Write;
+use warp::hyper::body::Bytes;
 
 #[inline]
-pub fn gzip_html(content: &str) -> Vec<u8> {
-	gzip_bytes(minify_html(content).as_bytes())
+pub fn gzip_html(content: &str) -> Bytes {
+	Bytes::from_owner(gzip_bytes(minify_html(content).as_bytes()))
 }
 
 #[inline]

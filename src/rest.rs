@@ -1,11 +1,13 @@
 use std::net::IpAddr;
 use std::sync::Arc;
 use warp::http::Response;
+use warp::hyper::body::Bytes;
 use crate::compression::{gzip_bytes, gzip_html};
 
 #[derive(Clone)]
 pub enum ApiResponse {
 	Binary(Vec<u8>),
+	SharedBinary(Bytes),
 	Html(String),
 	Redirect(String),
 	Unauthorized(String),
@@ -13,7 +15,7 @@ pub enum ApiResponse {
 	None,
 }
 impl ApiResponse {
-	pub fn into_response(self) -> Response<Vec<u8>> {
+	pub fn into_response(self) -> Response<Bytes> {
 		match self {
 			ApiResponse::Binary(bytes) => {
 				let compressed_bytes = gzip_bytes(&bytes);
@@ -21,7 +23,16 @@ impl ApiResponse {
 				Response::builder()
 					.header("Content-Type", "application/octet-stream")
 					.header("Content-Encoding", "gzip")
-					.body(compressed_bytes)
+					.body(Bytes::from_owner(compressed_bytes))
+					.unwrap()
+			},
+			ApiResponse::SharedBinary(bytes) => {
+				Response::builder()
+					.header("Content-Type", "application/octet-stream")
+					.header("Access-Control-Allow-Origin", "*")
+					.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+					.header("Access-Control-Allow-Headers", "Content-Type, Cookie")
+					.body(bytes)
 					.unwrap()
 			},
 			ApiResponse::Html(html_str) => {
@@ -39,13 +50,13 @@ impl ApiResponse {
 				Response::builder()
 					.status(303)
 					.header("Location", url)
-					.body(Vec::new())
+					.body(Bytes::new())
 					.unwrap()
 			},
 			ApiResponse::Unauthorized(msg) => {
 				Response::builder()
 					.status(401)
-					.body(msg.into_bytes())
+					.body(Bytes::from_owner(msg.into_bytes()))
 					.unwrap()
 			},
 			ApiResponse::LoginSuccess(token, url) => {
@@ -53,13 +64,13 @@ impl ApiResponse {
 					.status(303)
 					.header("Location", url)
 					.header("Set-Cookie", format!("auth_token={}; Path=/; HttpOnly; SameSite=Strict", token))
-					.body(Vec::new())
+					.body(Bytes::new())
 					.unwrap()
 			},
 			ApiResponse::None => {
 				Response::builder()
 					.status(303)
-					.body(Vec::new())
+					.body(Bytes::new())
 					.unwrap()
 			}
 		}

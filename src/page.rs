@@ -1,9 +1,10 @@
+use warp::hyper::body::Bytes;
 use crate::compression::{generate_etag, gzip_html};
 
 #[derive(Debug, Clone)]
 pub struct Page {
 	path: String,
-	html: Vec<u8>,
+	data: Bytes,
 	page_type: PageType,
 	etag: String,
 	requires_auth: bool,
@@ -15,7 +16,7 @@ impl Page {
 		Self {
 			path: path.into(),
 			etag: generate_etag(&html),
-			html,
+			data: html,
 			page_type: PageType::Html,
 			requires_auth: false,
 			serve_type: ServeType::Static,
@@ -27,7 +28,7 @@ impl Page {
 		Self {
 			path: path.into(),
 			etag: generate_etag(&css),
-			html: css,
+			data: css,
 			page_type: PageType::Css,
 			requires_auth: false,
 			serve_type: ServeType::Static,
@@ -39,7 +40,7 @@ impl Page {
 		Self {
 			path: path.into(),
 			etag: generate_etag(&js),
-			html: js,
+			data: js,
 			page_type: PageType::Javascript,
 			requires_auth: false,
 			serve_type: ServeType::Static,
@@ -50,7 +51,7 @@ impl Page {
 		let etag = generate_etag(&webp_bytes);
 		Self {
 			path: path.into(),
-			html: webp_bytes,
+			data: Bytes::from_owner(webp_bytes),
 			etag,
 			page_type: PageType::Image,
 			requires_auth: false,
@@ -112,7 +113,7 @@ impl Page {
 	#[inline] pub fn page_type(&self) -> &PageType { &self.page_type }
 	#[inline] pub fn path(&self) -> &str { &self.path }
 	#[inline] pub fn path_string(&self) -> String { self.path.clone() }
-	#[inline] pub fn html(&self) -> &Vec<u8> { &self.html }
+	#[inline] pub fn data(&self) -> &Bytes { &self.data }
 }
 
 #[derive(Debug, Clone)]

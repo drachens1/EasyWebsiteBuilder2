@@ -8,6 +8,7 @@ use std::time::Instant;
 use warp::http::Response;
 use warp::Filter;
 use DrachLogger::Logger;
+use warp::hyper::body::Bytes;
 
 pub struct Website {
 	landing: Page,
@@ -97,9 +98,9 @@ impl Website {
 		full_path: warp::path::FullPath,
 		method: warp::http::Method,
 		headers: warp::http::HeaderMap,
-		body: warp::hyper::body::Bytes,
+		body: Bytes,
 		addr: Option<SocketAddr>,
-	) -> Response<Vec<u8>> {
+	) -> Response<Bytes> {
 		#[cfg(debug_assertions)]
 		let timer = Instant::now();
 		let raw_path = full_path.as_str();
@@ -147,7 +148,7 @@ impl Website {
 					return Response::builder()
 						.status(303)
 						.header("Location", "/")
-						.body(Vec::new())
+						.body(Bytes::new())
 						.unwrap();
 				}
 			}
@@ -162,7 +163,7 @@ impl Website {
 					.status(304)
 					.header("ETag", page.etag())
 					.header("Cache-Control", page.cache_control())
-					.body(Vec::new())
+					.body(Bytes::new())
 					.unwrap();
 			}
 		}
@@ -181,7 +182,7 @@ impl Website {
 		self.logger.try_debug(&format!("STATIC: {} -> {} in {:?}", raw_path, status, timer.elapsed()));
 		#[cfg(not(debug_assertions))]
 		self.logger.try_info(&format!("STATIC: {} -> {}", raw_path, status));
-		builder.body(page.html().clone()).unwrap()
+		builder.body(page.data().clone()).unwrap()
 	}
 
 	fn clone_refs(&self) -> Self {
