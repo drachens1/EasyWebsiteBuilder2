@@ -10,3 +10,4 @@ sha2 = "0.11.0-rc.5"
 hex = "0.4"
 warp-real-ip = "0.2.0"
 DrachLogger = { path = "../DrachLogger" }
+hashbrown = { version = "0.17.0" }

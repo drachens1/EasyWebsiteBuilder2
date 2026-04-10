@@ -1,14 +1,14 @@
-use crate::page::{Page, PageType};
+use crate::page::Page;
 use crate::rest::{ApiEndpoint, ApiRequest, Method};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::convert::Infallible;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use warp::http::Response;
+use warp::hyper::body::Bytes;
 use warp::Filter;
 use DrachLogger::Logger;
-use warp::hyper::body::Bytes;
 
 pub struct Website {
 	landing: Page,
@@ -17,6 +17,8 @@ pub struct Website {
 	endpoints: Arc<RwLock<HashMap<String, ApiEndpoint>>>,
 	logger: Arc<Logger>,
 	secret: Option<String>,
+	response_304: Response<Bytes>,
+	response_auth_denied: Response<Bytes>,
 	fetch_ip: bool,
 }
 impl Website {
@@ -27,6 +29,15 @@ impl Website {
 			pages: Arc::new(RwLock::new(HashMap::new())),
 			endpoints: Arc::new(RwLock::new(HashMap::new())),
 			secret: None,
+			response_304: Response::builder()
+				.status(304)
+				.body(Bytes::new())
+				.unwrap(),
+			response_auth_denied: Response::builder()
+				.status(303)
+				.header("Location", "/")
+				.body(Bytes::new())
+				.unwrap(),
 			fetch_ip: false,
 			logger: Arc::new(Logger::new(log_path, true)),
 		}
@@ -39,6 +50,16 @@ impl Website {
 			pages: Arc::new(RwLock::new(HashMap::new())),
 			endpoints: Arc::new(RwLock::new(HashMap::new())),
 			secret: Some(secret.into()),
+			response_304: Response::builder()
+				.status(304)
+				.header("Cache-Control", "no-store, must-revalidate")
+				.body(Bytes::new())
+				.unwrap(),
+			response_auth_denied: Response::builder()
+				.status(303)
+				.header("Location", "/")
+				.body(Bytes::new())
+				.unwrap(),
 			fetch_ip: false,
 			logger: Arc::new(Logger::new(log_path, true)),
 		}
@@ -145,11 +166,7 @@ impl Website {
 
 				if !is_authenticated {
 					self.logger.try_debug(&format!("AUTH: Access Denied for {}", raw_path));
-					return Response::builder()
-						.status(303)
-						.header("Location", "/")
-						.body(Bytes::new())
-						.unwrap();
+					return self.response_auth_denied.clone();
 				}
 			}
 			(p, 200)
@@ -159,30 +176,16 @@ impl Website {
 
 		if let Some(inm) = headers.get("if-none-match") {
 			if inm.to_str().ok() == Some(page.etag()) {
-				return Response::builder()
-					.status(304)
-					.header("ETag", page.etag())
-					.header("Cache-Control", page.cache_control())
-					.body(Bytes::new())
-					.unwrap();
+				return self.response_304.clone();
 			}
 		}
 
-		let mut builder = Response::builder()
-			.status(status)
-			.header("Content-Type", page.content_type())
-			.header("Vary", "Accept-Encoding")
-			.header("Cache-Control", page.cache_control())
-			.header("ETag", page.etag());
 
-		if !matches!(page.page_type(), PageType::Image) {
-			builder = builder.header("Content-Encoding", "gzip");
-		}
 		#[cfg(debug_assertions)]
 		self.logger.try_debug(&format!("STATIC: {} -> {} in {:?}", raw_path, status, timer.elapsed()));
 		#[cfg(not(debug_assertions))]
 		self.logger.try_info(&format!("STATIC: {} -> {}", raw_path, status));
-		builder.body(page.data().clone()).unwrap()
+		page.response()
 	}
 
 	fn clone_refs(&self) -> Self {
@@ -193,6 +196,8 @@ impl Website {
 			endpoints: self.endpoints.clone(),
 			logger: self.logger.clone(),
 			secret: self.secret.clone(),
+			response_304: self.response_304.clone(),
+			response_auth_denied: self.response_auth_denied.clone(),
 			fetch_ip: self.fetch_ip,
 		}
 	}

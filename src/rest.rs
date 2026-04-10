@@ -1,8 +1,8 @@
+use crate::compression::{gzip_bytes, gzip_html};
 use std::net::IpAddr;
 use std::sync::Arc;
 use warp::http::Response;
 use warp::hyper::body::Bytes;
-use crate::compression::{gzip_bytes, gzip_html};
 
 #[derive(Clone)]
 pub enum ApiResponse {
@@ -18,60 +18,57 @@ impl ApiResponse {
 	pub fn into_response(self) -> Response<Bytes> {
 		match self {
 			ApiResponse::Binary(bytes) => {
-				let compressed_bytes = gzip_bytes(&bytes);
+				let compressed = gzip_bytes(&bytes);
+				let mut res = Response::new(Bytes::from(compressed));
+				let headers = res.headers_mut();
+				headers.insert("Content-Type", "application/octet-stream".parse().unwrap());
+				headers.insert("Content-Encoding", "gzip".parse().unwrap());
+				res
+			},
 
-				Response::builder()
-					.header("Content-Type", "application/octet-stream")
-					.header("Content-Encoding", "gzip")
-					.body(Bytes::from_owner(compressed_bytes))
-					.unwrap()
-			},
-			ApiResponse::SharedBinary(bytes) => {
-				Response::builder()
-					.header("Content-Type", "application/octet-stream")
-					.header("Access-Control-Allow-Origin", "*")
-					.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-					.header("Access-Control-Allow-Headers", "Content-Type, Cookie")
-					.body(bytes)
-					.unwrap()
-			},
 			ApiResponse::Html(html_str) => {
-				let compressed_html = gzip_html(&html_str);
+				let compressed = gzip_html(&html_str);
+				let mut res = Response::new(compressed);
+				let headers = res.headers_mut();
+				headers.insert("Content-Type", "text/html; charset=utf-8".parse().unwrap());
+				headers.insert("Content-Encoding", "gzip".parse().unwrap());
+				headers.insert("Cache-Control", "no-store, must-revalidate".parse().unwrap());
+				res
+			},
 
-				Response::builder()
-					.status(200)
-					.header("Content-Type", "text/html; charset=utf-8")
-					.header("Content-Encoding", "gzip")
-					.header("Cache-Control", "no-store, must-revalidate")
-					.body(compressed_html)
-					.unwrap()
-			},
 			ApiResponse::Redirect(url) => {
-				Response::builder()
-					.status(303)
-					.header("Location", url)
-					.body(Bytes::new())
-					.unwrap()
+				let mut res = Response::new(Bytes::new());
+				*res.status_mut() = warp::http::StatusCode::SEE_OTHER; // 303
+				res.headers_mut().insert("Location", url.parse().unwrap());
+				res
 			},
-			ApiResponse::Unauthorized(msg) => {
-				Response::builder()
-					.status(401)
-					.body(Bytes::from_owner(msg.into_bytes()))
-					.unwrap()
-			},
+
 			ApiResponse::LoginSuccess(token, url) => {
-				Response::builder()
-					.status(303)
-					.header("Location", url)
-					.header("Set-Cookie", format!("auth_token={}; Path=/; HttpOnly; SameSite=Strict", token))
-					.body(Bytes::new())
-					.unwrap()
+				let mut res = Response::new(Bytes::new());
+				*res.status_mut() = warp::http::StatusCode::SEE_OTHER;
+				let headers = res.headers_mut();
+				headers.insert("Location", url.parse().unwrap());
+				let cookie = format!("auth_token={}; Path=/; HttpOnly; SameSite=Strict", token);
+				headers.insert("Set-Cookie", cookie.parse().unwrap());
+				res
 			},
+
+			ApiResponse::Unauthorized(msg) => {
+				let mut res = Response::new(Bytes::from(msg.into_bytes()));
+				*res.status_mut() = warp::http::StatusCode::UNAUTHORIZED;
+				res
+			},
+
 			ApiResponse::None => {
-				Response::builder()
-					.status(303)
-					.body(Bytes::new())
-					.unwrap()
+				let mut res = Response::new(Bytes::new());
+				*res.status_mut() = warp::http::StatusCode::SEE_OTHER;
+				res
+			},
+
+			ApiResponse::SharedBinary(bytes) => {
+				let mut res = Response::new(bytes);
+				res.headers_mut().insert("Content-Type", "application/octet-stream".parse().unwrap());
+				res
 			}
 		}
 	}
