@@ -1,8 +1,16 @@
 use crate::compression::{gzip_bytes, gzip_html};
 use std::net::IpAddr;
 use std::sync::Arc;
-use warp::http::Response;
+use hashbrown::HashMap;
+use warp::http::{HeaderValue, Response, StatusCode};
+use warp::http::header::ACCESS_CONTROL_ALLOW_ORIGIN;
 use warp::hyper::body::Bytes;
+
+
+static BINARY_TYPE: HeaderValue = HeaderValue::from_static("application/octet-stream");
+static CORS_STAR: HeaderValue = HeaderValue::from_static("*");
+static CORS_METHODS: HeaderValue = HeaderValue::from_static("GET, POST, OPTIONS");
+static CORS_HEADERS: HeaderValue = HeaderValue::from_static("Content-Type, Cookie");
 
 #[derive(Clone)]
 pub enum ApiResponse {
@@ -12,6 +20,7 @@ pub enum ApiResponse {
 	Redirect(String),
 	Unauthorized(String),
 	LoginSuccess(String, String),
+	Okay,
 	None,
 }
 impl ApiResponse {
@@ -38,14 +47,14 @@ impl ApiResponse {
 
 			ApiResponse::Redirect(url) => {
 				let mut res = Response::new(Bytes::new());
-				*res.status_mut() = warp::http::StatusCode::SEE_OTHER; // 303
+				*res.status_mut() = StatusCode::SEE_OTHER; // 303
 				res.headers_mut().insert("Location", url.parse().unwrap());
 				res
 			},
 
 			ApiResponse::LoginSuccess(token, url) => {
 				let mut res = Response::new(Bytes::new());
-				*res.status_mut() = warp::http::StatusCode::SEE_OTHER;
+				*res.status_mut() = StatusCode::SEE_OTHER;
 				let headers = res.headers_mut();
 				headers.insert("Location", url.parse().unwrap());
 				let cookie = format!("auth_token={}; Path=/; HttpOnly; SameSite=Strict", token);
@@ -55,13 +64,23 @@ impl ApiResponse {
 
 			ApiResponse::Unauthorized(msg) => {
 				let mut res = Response::new(Bytes::from(msg.into_bytes()));
-				*res.status_mut() = warp::http::StatusCode::UNAUTHORIZED;
+				*res.status_mut() = StatusCode::UNAUTHORIZED;
 				res
 			},
 
 			ApiResponse::None => {
 				let mut res = Response::new(Bytes::new());
-				*res.status_mut() = warp::http::StatusCode::SEE_OTHER;
+				*res.status_mut() = StatusCode::SEE_OTHER;
+				res
+			},
+
+			ApiResponse::Okay => {
+				let mut res = Response::new(Bytes::new());
+				*res.status_mut() = StatusCode::OK;
+				let h = res.headers_mut();
+				h.insert(ACCESS_CONTROL_ALLOW_ORIGIN, CORS_STAR.clone());
+				h.insert("Access-Control-Allow-Methods", CORS_METHODS.clone());
+				h.insert("Access-Control-Allow-Headers", CORS_HEADERS.clone());
 				res
 			},
 
@@ -78,6 +97,7 @@ pub struct ApiRequest {
 	pub ip: IpAddr,
 	pub body: Vec<u8>,
 	pub method: warp::http::Method,
+	pub queries: HashMap<String, String>,
 }
 impl ApiRequest {
 	pub fn ip_string(&self) -> String {

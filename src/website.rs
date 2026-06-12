@@ -96,23 +96,23 @@ impl Website {
 		let base = warp::path::full()
 			.and(warp::method())
 			.and(warp::header::headers_cloned())
-			.and(warp::body::bytes());
+			.and(warp::body::bytes())
+			.and(warp::query::<HashMap<String, String>>());
 
 		let routes = if self.fetch_ip {
 			base.and(remote_addr())
-				.map(move |path, method, headers, body, addr| {
-					website_arc.handle_request(path, method, headers, body, addr)
-				})
-				.boxed()
+				.map(move |path, method, headers, body, queries, addr| {
+					website_arc.handle_request(path, method, headers, body, queries, addr)
+				}).boxed()
 		} else {
-			base.map(move |path, method, headers, body| {
-				website_arc.handle_request(path, method, headers, body, None)
-			})
-				.boxed()
+			base.map(move |path, method, headers, body, queries| {
+				website_arc.handle_request(path, method, headers, body, queries, None)
+			}).boxed()
 		};
 
 		warp::serve(routes).run((ip, port)).await;
 	}
+
 
 	fn handle_request(
 		&self,
@@ -120,6 +120,7 @@ impl Website {
 		method: warp::http::Method,
 		headers: warp::http::HeaderMap,
 		body: Bytes,
+		queries: HashMap<String, String>,
 		addr: Option<SocketAddr>,
 	) -> Response<Bytes> {
 		#[cfg(debug_assertions)]
@@ -142,6 +143,7 @@ impl Website {
 					ip: client_ip,
 					body: body.to_vec(),
 					method: method.clone(),
+					queries,
 				};
 
 				let resp = (endpoint.handler)(req).into_response();
