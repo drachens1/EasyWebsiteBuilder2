@@ -113,7 +113,6 @@ impl Website {
 		warp::serve(routes).run((ip, port)).await;
 	}
 
-
 	fn handle_request(
 		&self,
 		full_path: warp::path::FullPath,

@@ -15,6 +15,7 @@ static CORS_HEADERS: HeaderValue = HeaderValue::from_static("Content-Type, Cooki
 #[derive(Clone)]
 pub enum ApiResponse {
 	Binary(Vec<u8>),
+	BinaryNotCompressed(Vec<u8>),
 	SharedBinary(Bytes),
 	Html(String),
 	Redirect(String),
@@ -32,6 +33,13 @@ impl ApiResponse {
 				let headers = res.headers_mut();
 				headers.insert("Content-Type", "application/octet-stream".parse().unwrap());
 				headers.insert("Content-Encoding", "gzip".parse().unwrap());
+				res
+			},
+
+			ApiResponse::BinaryNotCompressed(bytes) => {
+				let mut res = Response::new(Bytes::from(bytes));
+				let headers = res.headers_mut();
+				headers.insert("Content-Type", "application/octet-stream".parse().unwrap());
 				res
 			},
 
@@ -86,6 +94,7 @@ impl ApiResponse {
 
 			ApiResponse::SharedBinary(bytes) => {
 				let mut res = Response::new(bytes);
+				*res.status_mut() = StatusCode::OK;
 				res.headers_mut().insert("Content-Type", "application/octet-stream".parse().unwrap());
 				res
 			}
