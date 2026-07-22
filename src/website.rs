@@ -3,7 +3,8 @@ use crate::rest::{ApiEndpoint, ApiRequest, Method};
 use hashbrown::HashMap;
 use std::convert::Infallible;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use std::time::Instant;
 use warp::http::Response;
 use warp::hyper::body::Bytes;
@@ -21,6 +22,7 @@ pub struct Website {
 	response_auth_denied: Response<Bytes>,
 	fetch_ip: bool,
 }
+
 impl Website {
 	pub fn new(log_path: &str, landing: Page, not_found: Page) -> Self {
 		Self {
@@ -65,26 +67,27 @@ impl Website {
 		}
 	}
 
-	#[inline] pub fn fetch_ip(mut self) -> Self {
+	#[inline]
+	pub fn fetch_ip(mut self) -> Self {
 		self.fetch_ip = true;
 		self
 	}
 
 	#[inline]
 	pub async fn add_page(&self, page: Page) {
-		let mut lock = self.pages.write().unwrap();
+		let mut lock = self.pages.write().await;
 		lock.insert(page.path_string(), page);
 	}
 
 	#[inline]
 	pub async fn remove_page(&self, path_string: &str) -> Option<Page> {
-		let mut lock = self.pages.write().unwrap();
+		let mut lock = self.pages.write().await;
 		lock.remove(path_string)
 	}
 
 	#[inline]
 	pub async fn add_rest_endpoint(&self, endpoint: ApiEndpoint) {
-		let mut lock = self.endpoints.write().unwrap();
+		let mut lock = self.endpoints.write().await;
 		lock.insert(endpoint.path.clone(), endpoint);
 	}
 
@@ -101,19 +104,27 @@ impl Website {
 
 		let routes = if self.fetch_ip {
 			base.and(remote_addr())
-				.map(move |path, method, headers, body, queries, addr| {
-					website_arc.handle_request(path, method, headers, body, queries, addr)
-				}).boxed()
+				.then(move |path, method, headers, body, queries, addr| {
+					let website = website_arc.clone();
+					async move {
+						website.handle_request(path, method, headers, body, queries, addr).await
+					}
+				})
+				.boxed()
 		} else {
-			base.map(move |path, method, headers, body, queries| {
-				website_arc.handle_request(path, method, headers, body, queries, None)
-			}).boxed()
+			base.then(move |path, method, headers, body, queries| {
+				let website = website_arc.clone();
+				async move {
+					website.handle_request(path, method, headers, body, queries, None).await
+				}
+			})
+				.boxed()
 		};
 
 		warp::serve(routes).run((ip, port)).await;
 	}
 
-	fn handle_request(
+	async fn handle_request(
 		&self,
 		full_path: warp::path::FullPath,
 		method: warp::http::Method,
@@ -126,7 +137,7 @@ impl Website {
 		let timer = Instant::now();
 		let raw_path = full_path.as_str();
 
-		let endpoints_lock = self.endpoints.read().unwrap();
+		let endpoints_lock = self.endpoints.read().await;
 		if let Some(endpoint) = endpoints_lock.get(raw_path) {
 			let method_matches = match endpoint.method {
 				Method::GET => method == warp::http::Method::GET,
@@ -153,7 +164,7 @@ impl Website {
 		}
 		drop(endpoints_lock);
 
-		let pages_lock = self.pages.read().unwrap();
+		let pages_lock = self.pages.read().await;
 		let auth_token = self.secret.as_ref().map(|s| format!("auth_token={}", s));
 
 		let (page, status) = if raw_path == "/" {
@@ -162,10 +173,11 @@ impl Website {
 			if p.requires_auth() {
 				let is_authenticated = headers.get("cookie")
 					.and_then(|c| c.to_str().ok())
-					.map(|c| c.contains(&auth_token.unwrap()))
+					.map(|c| c.contains(auth_token.as_ref().unwrap()))
 					.unwrap_or(false);
 
 				if !is_authenticated {
+					#[cfg(debug_assertions)]
 					self.logger.try_debug(&format!("AUTH: Access Denied for {}", raw_path));
 					return self.response_auth_denied.clone();
 				}
@@ -180,7 +192,6 @@ impl Website {
 				return self.response_304.clone();
 			}
 		}
-
 
 		#[cfg(debug_assertions)]
 		self.logger.try_debug(&format!("STATIC: {} -> {} in {:?}", raw_path, status, timer.elapsed()));

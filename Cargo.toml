@@ -8,6 +8,7 @@ flate2 = "1"
 warp = { version = "0.4", features = ["server"] }
 sha2 = "0.11"
 hex = "0.4"
-warp-real-ip = "0.2.0"
+warp-real-ip = "0.3.0"
 DrachLogger = { path = "../DrachLogger" }
 hashbrown = { version = "0.17", features = ["serde"] }
+tokio = { version = "1.53.1", features = ["sync"] }

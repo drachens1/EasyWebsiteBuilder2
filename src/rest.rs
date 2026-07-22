@@ -21,6 +21,11 @@ pub enum ApiResponse {
 	Redirect(String),
 	Unauthorized(String),
 	LoginSuccess(String, String),
+	Json(String),
+	Text(String),
+	Forbidden(String),
+	BadRequest(String),
+	CustomStatus(u16, String),
 	Okay,
 	None,
 }
@@ -96,6 +101,46 @@ impl ApiResponse {
 				let mut res = Response::new(bytes);
 				*res.status_mut() = StatusCode::OK;
 				res.headers_mut().insert("Content-Type", "application/octet-stream".parse().unwrap());
+				res
+			}
+
+			ApiResponse::Json(json_str) => {
+				let mut res = Response::new(Bytes::from(json_str.into_bytes()));
+				*res.status_mut() = StatusCode::OK;
+				let headers = res.headers_mut();
+				headers.insert("Content-Type", "application/json".parse().unwrap());
+				headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, CORS_STAR.clone());
+				res
+			}
+
+			ApiResponse::Text(text_str) => {
+				let mut res = Response::new(Bytes::from(text_str.into_bytes()));
+				*res.status_mut() = StatusCode::OK;
+				let headers = res.headers_mut();
+				headers.insert("Content-Type", "text/plain; charset=utf-8".parse().unwrap());
+				headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, CORS_STAR.clone());
+				res
+			}
+
+			ApiResponse::BadRequest(msg) => {
+				let mut res = Response::new(Bytes::from(msg.into_bytes()));
+				*res.status_mut() = StatusCode::BAD_REQUEST;
+				res
+			}
+
+			ApiResponse::Forbidden(msg) => {
+				let mut res = Response::new(Bytes::from(msg.into_bytes()));
+				*res.status_mut() = StatusCode::FORBIDDEN;
+				res
+			}
+
+			ApiResponse::CustomStatus(status_code, msg) => {
+				let mut res = Response::new(Bytes::from(msg.into_bytes()));
+				if let Ok(status) = StatusCode::from_u16(status_code) {
+					*res.status_mut() = status;
+				} else {
+					*res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+				}
 				res
 			}
 		}
