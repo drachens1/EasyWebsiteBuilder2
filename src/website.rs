@@ -9,7 +9,7 @@ use std::time::Instant;
 use warp::http::Response;
 use warp::hyper::body::Bytes;
 use warp::Filter;
-use DrachLogger::Logger;
+use drach_logger::Logger;
 
 pub struct Website {
 	landing: Page,

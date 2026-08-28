@@ -3,19 +3,10 @@
 version = 4
 
 [[package]]
-name = "DrachLogger"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "termcolor",
- "tokio",
-]
-
-[[package]]
 name = "EasyWebsiteBuilder2"
 version = "0.1.0"
 dependencies = [
- "DrachLogger",
+ "drach-logger",
  "flate2",
  "hashbrown",
  "hex",
@@ -206,6 +197,15 @@ dependencies = [
  "block-buffer 0.12.1",
  "const-oid",
  "crypto-common 0.2.2",
+]
+
+[[package]]
+name = "drach-logger"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "termcolor",
+ "tokio",
 ]
 
 [[package]]

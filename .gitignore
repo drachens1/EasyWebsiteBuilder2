@@ -1,2 +1,13 @@
 # Project exclude paths
 /target/
+
+# JetBrains
+.idea/
+*.iml
+.junie/
+junie.xml
+out/
+
+# Rust
+target/
+**/*.rs.bk

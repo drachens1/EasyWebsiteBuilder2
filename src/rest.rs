@@ -6,7 +6,6 @@ use warp::http::{HeaderValue, Response, StatusCode};
 use warp::http::header::ACCESS_CONTROL_ALLOW_ORIGIN;
 use warp::hyper::body::Bytes;
 
-
 static BINARY_TYPE: HeaderValue = HeaderValue::from_static("application/octet-stream");
 static CORS_STAR: HeaderValue = HeaderValue::from_static("*");
 static CORS_METHODS: HeaderValue = HeaderValue::from_static("GET, POST, OPTIONS");
